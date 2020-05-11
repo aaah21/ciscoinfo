@@ -46,7 +46,7 @@ def printarg():
 def main(argvs):
     chk_arg = check_args(argvs)
     if chk_arg[3] == '':
-        chk_arg[3] = 'cdp.csv'
+        chk_arg[3] = 'interfaces.csv'
     if not chk_arg[0]:
         exit()
     if chk_arg[2] == '':
@@ -55,8 +55,8 @@ def main(argvs):
     con = ssh(chk_arg[1], chk_arg[2], pw)
     print('trying to connect ...')
     con.connect()
-    cdp_info = ciscoinfo('cdp', con, chk_arg[3])
-    print('status: {}.  result: {}'.format(cdp_info.cisco_status[0], cdp_info.cisco_status[1]))
+    intf_info = ciscoinfo('interfaces', con, chk_arg[3])
+    print('status: {}.  result: {}'.format(intf_info.cisco_status[0], intf_info.cisco_status[1]))
 
 
 if __name__ == "__main__":

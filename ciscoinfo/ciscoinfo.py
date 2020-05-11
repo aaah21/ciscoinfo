@@ -6,6 +6,8 @@ import time
 import paramiko
 from datetime import datetime
 from os import path
+import pprint
+import test2  # just data example
 
 
 class ssh(object):
@@ -49,7 +51,8 @@ class ssh(object):
         output = b''
         command = 'terminal length 0 \n' + command
         self.channel.send(command)
-        self.channel.recv(len(command))
+        time.sleep(2)
+        output2 = self.channel.recv(len(command) + 100)
         self.channel.send('\n')
         time.sleep(2)
         while self.channel.recv_ready():
@@ -85,6 +88,91 @@ class cdp(object):
             self.cdp_status = [-1, self.cdp_ssh.ssh_status[1]]
 
 
+class ciscoinfo(object):
+    def __init__(self, cisco_type, cisco_ssh: ssh, cisco_file):
+        # cisco_type Values
+        # 'cdp'             cdp report
+        # 'interfaces'      interfaces report
+        if len(cisco_file) == 0:
+            cisco_file = 'interfaces.txt'
+        self.cisco_ssh = cisco_ssh
+        self.cisco_data = []
+        self.cisco_status = [-1, 'Unknown Issue']
+        self.cisco_file = cisco_file
+        self.cisco_type = cisco_type
+        self.run()
+
+    def run(self):
+        run_command = ''
+        run_header = ''
+        if self.cisco_ssh.ssh_status[0] > 0:
+            if self.cisco_type == 'cdp':
+                run_command = 'show cdp nei detail'
+                run_header = ['Hostname', 'IP', 'Platform', 'Capabilities', 'Local Interface', 'Remote Interface',
+                              'Version']
+            if self.cisco_type == 'interfaces':
+                run_command = 'show interfaces'
+                run_header = ['Interface', 'State', 'Line Protocol', 'Physical Address', 'Internet Address',
+                              'Description', 'MTU', 'BW', 'Reliability', 'Txload', 'Rxload', 'Media Type',
+                              'Input flow-control', 'Output flow-control', 'Arp Timeout',
+                              'Input Queue (size/max/drops/flushes)',
+                              'Total Output Drops', 'Output Queue (size/max)', 'Input Rate', 'Output Rate']
+            cisco_result = self.cisco_ssh.execute(run_command)
+            self.cisco_status = [0, 'Pulling Data ...']
+
+            if self.cisco_type == 'cdp':
+                cisco_result = convertcdp(cisco_result)
+            if self.cisco_type == 'interfaces':
+                cisco_result = convertintf(cisco_result)
+
+            self.cisco_status = [1, 'Pulled {} Lines.'.format(len(cisco_result))]
+            cisco_save = savefile(self.cisco_file, cisco_result, run_header)
+            self.cisco_status[1] = self.cisco_status[1] + '\n' + cisco_save[1]
+            if not cisco_save[0]:
+                exit()
+        else:
+            self.cisco_status = [-1, self.cisco_ssh.ssh_status[1]]
+
+
+def convertintf(interf_data):
+    intf_item = []
+    lz = [[', address is', 13, 14], ['internet address', 19, 20], ['description:', 13, 60], ['mtu', 4, 'bytes'],
+          [', bw ', 5, 'kbit'], ['reliability', 11, ','], ['txload', 7, ','], ['rxload', 7, 15], ['media type', 14, 20],
+          ['input flow-control is', 22, ','], ['output flow-control', 22, 30], ['arp timeout', 12, 10],
+          ['input queue', 12, '('], ['total output drops', 19, 10], ['output queue', 13, '('],
+          ['input rate', 11, 20], ['output rate', 12, 20]]
+    lines = []
+    intf_list = []
+    for i in interf_data:
+        lines.append(i.rstrip())
+    for i in range(0, len(lines) - 1):
+        if len(lines[i]) == 0:
+            continue
+        l = lines[i].lower()
+        if lines[i][0] != ' ':
+            if len(intf_item) > 0:
+                intf_list.append(intf_item)
+            intf_item = []
+            for intf_i in range(0, 20):
+                intf_item.append('')
+            intf_item[0] = (l[0:l.find(' ')])  # interface name
+            intf_item[1] = (l[l.find('is ') + 3:l.find(',')])  # Line state
+            intf_item[2] = (l[l.find('protocol is') + 12:])  # Protocol state
+        ycount = 0
+        for y in lz:
+            ycount += 1
+            lx = l.find(y[0])
+            if lx > 0:
+                lx = lx + y[1]
+                if 'int' in str(type(y[2])):
+                    intf_len = y[2]
+                else:
+                    intf_len = l[lx:].find(y[2])
+                intf_valuex = l[lx:lx + intf_len]
+                intf_item[ycount + 2] = intf_valuex
+    return intf_list
+
+
 def convertcdp(cdp_data):
     cdp_lines = []
     cdp_result = []
@@ -93,7 +181,7 @@ def convertcdp(cdp_data):
         cdp_lines.append(i.rstrip())
     for i in range(0, len(cdp_lines) - 1):
         if not len(cdp_lines[i]) > 0:
-            next
+            continue
         y = cdp_lines[i]
         z = ''
         if i > 0:
