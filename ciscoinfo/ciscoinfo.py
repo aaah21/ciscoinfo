@@ -133,7 +133,7 @@ def readfile(filename):
 
 def savefile(fn1, lines_list, headers_list):
     header = ''
-    fn2 = fn1[0:fn1.rfind('.')] + datetime.now().strftime('%Y%m%d_%H%M%S') + fn1[fn1.rfind('.') - 1:]
+    fn2 = fn1[0:fn1.rfind('.')] + '_' + datetime.now().strftime('%Y%m%d_%H%M%S') + fn1[fn1.rfind('.') - 1:]
     for i in range(0, len(headers_list)):
         header = header + '"' + headers_list[i] + '"'
         if i != len(headers_list) - 1:
@@ -142,7 +142,7 @@ def savefile(fn1, lines_list, headers_list):
     if path.exists(fn1):
         fn1 = fn2
     try:
-        file1 = open(fn2, "w")
+        file1 = open(fn1, "w")
     except Exception as e:
         return False, e
     file1.writelines(header)
