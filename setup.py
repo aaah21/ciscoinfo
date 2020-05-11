@@ -1,6 +1,5 @@
 from setuptools import setup, find_packages
-REQUIRES = ['time', 'paramiko', 'datetime', 'os' ]
-REQUIRES = ['paramiko', 'datetime', 'os' ]
+REQUIRES = ['paramiko']
 setup(
     name='CiscoInfo',
     version='1.0.0',
