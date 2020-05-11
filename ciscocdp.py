@@ -1,3 +1,13 @@
+# Aleandro Andrea aaah1976@gmail.com
+# 05/2020
+#
+# Arguments
+# Pull CDP data from switch and return a formatted file.
+# ciscocdp.py -ip:192.168.1.1 [-u:user] [-o:file.txt]
+# -ip          IP of the Cisco device
+# -u           User to log in
+# -o           Output File. Default value "cdp.csv"
+
 import getpass
 import sys
 
