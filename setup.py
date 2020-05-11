@@ -1,5 +1,6 @@
 from setuptools import setup, find_packages
-
+REQUIRES = ['time', 'paramiko', 'datetime', 'os' ]
+REQUIRES = ['paramiko', 'datetime', 'os' ]
 setup(
     name='CiscoInfo',
     version='1.0.0',
@@ -8,5 +9,5 @@ setup(
     author_email='aaah1976@gmail.com',
     description='Library to query Cisco devices via ssh',
     packages=find_packages(),
-    install_requires=['time', 'paramiko', 'datetime', 'os' ],
+    install_requires=REQUIRES,
 )
