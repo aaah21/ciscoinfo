@@ -8,5 +8,5 @@ setup(
     author_email='aaah1976@gmail.com',
     description='Library to query Cisco devices via ssh',
     packages=find_packages(),
-    install_requires=['numpy >= 1.11.1', 'matplotlib >= 1.5.1'],
+    install_requires=['time', 'paramiko', 'datetime', 'os' ],
 )
