@@ -21,7 +21,7 @@ def check_args(args):
     for i in range(0, len(args)):
         y = args[i].lower()
         if '-p:' in y:
-            ip = (y[y.find("-p:") + 3:])
+            ip = (y[y.find("-ip:") + 3:])
         if '-u:' in y:
             user = (y[y.find("-u:") + 3:])
         if '-o:' in y:

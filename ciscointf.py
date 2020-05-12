@@ -34,13 +34,13 @@ def check_args(args):
 
 def printarg():
     print()
-    print('Pull CDP data from switch and return a formatted file.')
+    print('Pull Interface info  data from switch and return a formatted file.')
     print()
-    print('ciscocdp.py -ip:192.168.1.1 [-u:user] [-o:file.txt]')
+    print('ciscointf.py -ip:192.168.1.1 [-u:user] [-o:file.txt]')
     print()
     print('-ip          IP of the Cisco device')
     print('-u           User to log in ')
-    print('-o           Output File. Default value "cdp.csv"')
+    print('-o           Output File. Default value "interfaces.csv"')
 
 
 def main(argvs):
@@ -61,8 +61,8 @@ def main(argvs):
 
 if __name__ == "__main__":
     # Arguments
-    # Pull CDP data from switch and return a formatted file.
-    # ciscocdp.py -ip:192.168.1.1 [-u:user] [-o:file.txt]
+    # Pull Interface info  data from switch and return a formatted file.
+    # ciscointf.py -ip:192.168.1.1 [-u:user] [-o:file.txt]
     # -ip          IP of the Cisco device
     # -u           User to log in
     # -o           Output File. Default value "cdp.csv"
