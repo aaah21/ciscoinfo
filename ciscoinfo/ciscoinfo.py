@@ -7,7 +7,6 @@ import paramiko
 from datetime import datetime
 from os import path
 import pprint
-import test2  # just data example
 
 
 class ssh(object):
