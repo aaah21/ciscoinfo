@@ -1,12 +1,25 @@
 # Aleandro Andrea aaah1976@gmail.com
 # 05/2020
 #
+# ciscoinfo
+#     Arguments
+#           cisco_type: cdp, interfaces
+#           cisco_ssh : ssh object
+#           cisco_file: Name of file for output.
+#
+# ssh
+#     Arguments
+#           ip  : Device's IP
+#           user: User to login.
+#           pw  : Password to login
+
 
 import time
 import paramiko
 from datetime import datetime
 from os import path
-import pprint
+
+import data_sample
 
 
 class ssh(object):
@@ -61,31 +74,32 @@ class ssh(object):
         return output
 
 
-class cdp(object):
-    def __init__(self, cdp_ssh: ssh, cdp_file):
-        if len(cdp_file) == 0:
-            cdp_file = 'cdp.txt'
-        self.cdp_ssh = cdp_ssh
-        self.cdp_data = []
-        self.cdp_status = [-1, 'Unknown Issue']
-        self.cdp_file = cdp_file
-        self.run()
-
-    def run(self):
-        if self.cdp_ssh.ssh_status[0] > 0:
-            cdp_result = self.cdp_ssh.execute('show cdp nei detail')
-            self.cdp_status = [0, 'Pulling Data ...']
-            cdp_result = convertcdp(cdp_result)
-            self.cdp_status = [1, 'Pulled {} Devices.'.format(len(cdp_result))]
-            cdp_save = savefile(self.cdp_file, cdp_result,
-                                ['Hostname', 'IP', 'Platform', 'Capabilities', 'Local Interface',
-                                 'Remote Interface', 'Version'])
-            self.cdp_status[1] = self.cdp_status[1] + '\n' + cdp_save[1]
-            if not cdp_save[0]:
-                exit()
-        else:
-            self.cdp_status = [-1, self.cdp_ssh.ssh_status[1]]
-
+#
+# class cdp(object):
+#     def __init__(self, cdp_ssh: ssh, cdp_file):
+#         if len(cdp_file) == 0:
+#             cdp_file = 'cdp.txt'
+#         self.cdp_ssh = cdp_ssh
+#         self.cdp_data = []
+#         self.cdp_status = [-1, 'Unknown Issue']
+#         self.cdp_file = cdp_file
+#         self.run()
+#
+#     def run(self):
+#         if self.cdp_ssh.ssh_status[0] > 0:
+#             cdp_result = self.cdp_ssh.execute('show cdp nei detail')
+#             self.cdp_status = [0, 'Pulling Data ...']
+#             cdp_result = convertcdp(cdp_result)
+#             self.cdp_status = [1, 'Pulled {} Devices.'.format(len(cdp_result))]
+#             cdp_save = savefile(self.cdp_file, cdp_result,
+#                                 ['Hostname', 'IP', 'Platform', 'Capabilities', 'Local Interface',
+#                                  'Remote Interface', 'Version'])
+#             self.cdp_status[1] = self.cdp_status[1] + '\n' + cdp_save[1]
+#             if not cdp_save[0]:
+#                 exit()
+#         else:
+#             self.cdp_status = [-1, self.cdp_ssh.ssh_status[1]]
+#
 
 class ciscoinfo(object):
     def __init__(self, cisco_type, cisco_ssh: ssh, cisco_file):
@@ -93,12 +107,16 @@ class ciscoinfo(object):
         # 'cdp'             cdp report
         # 'interfaces'      interfaces report
         if len(cisco_file) == 0:
-            cisco_file = 'interfaces.txt'
+            if 'interfaces' in cisco_type:
+                cisco_file = 'interfaces.csv'
+            if 'cdp' in cisco_type:
+                cisco_file = 'cdp.csv'
+
+        self.cisco_type = cisco_type
         self.cisco_ssh = cisco_ssh
         self.cisco_data = []
         self.cisco_status = [-1, 'Unknown Issue']
         self.cisco_file = cisco_file
-        self.cisco_type = cisco_type
         self.run()
 
     def run(self):
@@ -110,6 +128,7 @@ class ciscoinfo(object):
                 run_header = ['Hostname', 'IP', 'Platform', 'Capabilities', 'Local Interface', 'Remote Interface',
                               'Version']
             if self.cisco_type == 'interfaces':
+                run_command = 'show interfaces\n show interfaces status'
                 run_command = 'show interfaces'
                 run_header = ['Interface', 'State', 'Line Protocol', 'Physical Address', 'Internet Address',
                               'Description', 'MTU', 'BW', 'Reliability', 'Txload', 'Rxload', 'Media Type',
@@ -118,7 +137,6 @@ class ciscoinfo(object):
                               'Total Output Drops', 'Output Queue (size/max)', 'Input Rate', 'Output Rate']
             cisco_result = self.cisco_ssh.execute(run_command)
             self.cisco_status = [0, 'Pulling Data ...']
-
             if self.cisco_type == 'cdp':
                 cisco_result = convertcdp(cisco_result)
             if self.cisco_type == 'interfaces':

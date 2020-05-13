@@ -32,7 +32,7 @@ def check_args(args):
         y = args[i].lower()
         if '-t:' in y:
             ar_type = (y[y.find("-t:") + 3:])
-        if '-p:' in y:
+        if '-ip:' in y:
             ar_ip = (y[y.find("-ip:") + 4:])
         if '-u:' in y:
             ar_user = (y[y.find("-u:") + 3:])
@@ -62,18 +62,20 @@ def printarg():
 
 def main(argvs):
     chk_arg = check_args(argvs)
-    if chk_arg[3] == '':
-        chk_arg[3] = 'output.csv'
+    if chk_arg[4] == '':
+        chk_arg[4] = 'output.csv'
     if not chk_arg[0]:
         exit()
     if chk_arg[3] == '':
         chk_arg[3] = getpass.getuser()
     pw = getpass.getpass()
     con = ssh(chk_arg[2], chk_arg[3], pw)
-    print('trying to connect ...')
+    print('Trying to connect ...')
     con.connect()
-    cdp_info = ciscoinfo(chk_arg[2], con, chk_arg[3])
-    print('status: {}.  result: {}'.format(cdp_info.cisco_status[0], cdp_info.cisco_status[1]))
+    if con.ssh_status[0] > 0:
+        print('Pulling data ...')
+    cdp_info = ciscoinfo(chk_arg[1], con, chk_arg[4])
+    print('Result: {}'.format(cdp_info.cisco_status[1]))
 
 
 if __name__ == "__main__":
