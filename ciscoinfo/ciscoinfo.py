@@ -124,18 +124,19 @@ class ciscoinfo(object):
         run_command = ''
         run_header = ''
         if self.cisco_ssh.ssh_status[0] > 0:
+            # Commands and Headers to save files
             if self.cisco_type == 'cdp':
                 run_command = 'show cdp nei detail'
                 run_header = ['Hostname', 'IP', 'Platform', 'Capabilities', 'Local Interface', 'Remote Interface',
                               'Version']
             if self.cisco_type == 'interfaces':
-                run_command = 'show interfaces\n show interfaces status'
-                # run_command = 'show interfaces'
-                run_header = ['Interface', 'State', 'Line Protocol', 'State', 'VLAN/Trunk', 'Physical Address',
+                run_command = 'show interfaces\n show interfaces status\n show vlan'
+                run_header = ['Interface', 'State', 'Line Protocol', 'VLAN/Trunk', 'VLAN Name', 'Physical Address',
                               'Internet Address', 'Description', 'MTU', 'BW', 'Reliability', 'Txload', 'Rxload',
                               'Media Type', 'Input flow-control', 'Output flow-control', 'Arp Timeout',
                               'Input Queue (size/max/drops/flushes)', 'Total Output Drops', 'Output Queue (size/max)',
                               'Input Rate', 'Output Rate']
+            # Commands and Headers to save files ######################################
             cisco_result = self.cisco_ssh.execute(run_command)
             self.cisco_status = [0, 'Pulling Data ...']
             if self.cisco_type == 'cdp':
@@ -153,25 +154,27 @@ class ciscoinfo(object):
 
 
 def convertintf(interf_data):
+    # pprint.pprint(interf_data)
+    intf_list = []
+    intf_list_2 = []
+    intf_list_3 = []
     intf_item = []
-    item_state = 0
     item_vlan = 0
+    item_name = 0
     lz = [[', address is', 13, 14], ['internet address', 19, 20], ['description:', 13, 60], ['mtu', 4, 'bytes'],
           [', bw ', 5, 'kbit'], ['reliability', 11, ','], ['txload', 7, ','], ['rxload', 7, 15], ['media type', 14, 20],
           ['input flow-control is', 22, ','], ['output flow-control', 22, 30], ['arp timeout', 12, 10],
           ['input queue', 12, '('], ['total output drops', 19, 10], ['output queue', 13, '('],
           ['input rate', 11, 20], ['output rate', 12, 20]]
     lines = []
-    intf_list = []
-    intf_list_aux = []
     for i in interf_data:
         lines.append(i.rstrip())
-    sw_1st_part = True
-    for i in range(0, len(lines) - 1):
+    sw_part = 1
+    for i in range(0, len(lines)):
         l = lines[i].lower()
         if len(lines[i]) == 0 or l.find('show') > 0:  # remote empty lines and command lines
             continue
-        if sw_1st_part:  # process the first command show cdp ne detail
+        if sw_part == 1:  # process the first command show cdp ne detail
             if lines[i][0] != ' ':
                 if len(intf_item) > 0:
                     intf_list.append(intf_item)
@@ -193,27 +196,42 @@ def convertintf(interf_data):
                         intf_len = l[lx:].find(y[2])
                     intf_valuex = l[lx:lx + intf_len]
                     intf_item[ycount + 4] = intf_valuex
-            if l.find('port') >= 0 and l.find('name') > 0 and l.find('status') > 0 and l.find('vlan') > 0:
-                item_state = l.find('status')
-                item_vlan = l.find('vlan')
-                # print('{} {}'.format(item_state, item_vlan))
-                sw_1st_part = False
-                continue
-        else:  # process the second command show interface status
-            intf_item_aux = ['', '', '']
+        if l.find('port') == 0 and l.find('name') > 0 and l.find('status') > 0 and l.find(
+                'vlan') > 0:  # show vlan interface status
+            item_vlan = l.find('vlan')
+            sw_part = 2
+            continue
+        if l.find('vlan') == 0 and l.find('name') > 0:  # show vlan command
+            item_name = l.find('name')
+            sw_part = 3
+            continue
+
+        if sw_part == 2:  # process the second command show interface status
+            intf_item_aux = ['', '']
             intf_item_aux[0] = l[0:l.find(' ')]
-            intf_item_aux[1] = l[item_state:item_state + l[item_state:].find(' ')]
-            intf_item_aux[2] = l[item_vlan:item_vlan + l[item_vlan:].find(' ')]
-            intf_list_aux.append(intf_item_aux)
-    for i in range(0, len(intf_list_aux)):
-        item_aux = intf_list_aux[i]
-        for y in range(0, len(intf_list)):
-            item = intf_list[y]
-            if item_aux[0][0:2] == item[0][0:2] and item_aux[0][3:] in item[0]:
-                item[3] = item_aux[1]
-                item[4] = item_aux[2]
-                intf_list[y] = item
-    # pprint.pprint(intf_list)
+            intf_item_aux[1] = l[item_vlan:item_vlan + l[item_vlan:].find(' ')]
+            intf_list_2.append(intf_item_aux)
+        elif sw_part == 3:  # process the 3rd  command show vlan
+            intf_item_aux = ['', '']
+            intf_item_aux[0] = l[0:l.find(' ')]
+            intf_item_aux[1] = l[item_name:item_name + l[item_name:].find(' ')]
+            intf_list_3.append(intf_item_aux)
+
+    for i in range(0, len(intf_list)):  # Merges "show interfaces" and "show interfaces status" commands
+        item = intf_list[i]
+        for y in range(0, len(intf_list_2)):
+            item_2 = intf_list_2[y]
+            if item_2[0][0:2] == item[0][0:2] and item_2[0][3:] in item[0]:
+                item[3] = item_2[1]
+                intf_list[i] = item
+                break
+        item = intf_list[i]
+        for y in range(0, len(intf_list_3)):
+            item_3 = intf_list_3[y]
+            if item_3[0] == item[3]:
+                item[4] = item_3[1]
+                intf_list[i] = item
+                break
     return intf_list
 
 
