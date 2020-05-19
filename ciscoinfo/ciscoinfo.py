@@ -18,22 +18,35 @@ import time
 import paramiko
 from datetime import datetime
 from os import path
-
+import ipaddress
 import data_sample
 import pprint
 
 
 class ssh(object):
-    def __init__(self, ip, user, pw):
+    def __init__(self, ip, user, pw, verbose):
+        # parameters IP, User and password
+        # ssh_status[0] = -2    SSH Connection. Failed Authentication
+        # ssh_status[0] = -1    SSH Host does not respond
+        # ssh_status[0] = 0     SSH initial status
+        # ssh_status[0] = 1     SSH Established. SSH User Mode
+        # ssh_status[0] = 2     SSH Established. Privilege Mode
+        #
+        # ssh_status[1]         SSH Message.
+        #
         self.ip = ip
         self.user = user
         self.pw = pw
-        self.ssh_status = ['', '']
+        self.ssh_status = [0, '']
         self.ssh_socket = paramiko.SSHClient()
         self.ssh_socket.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        self.channel = ''
+        self.channel = self.ssh_socket.invoke_shell
+        self.verbose = verbose
 
     def connect(self):
+        # verbose on
+        print('Opening SSH Connection...')
+        #
         try:
             self.ssh_socket.connect(self.ip, port=22, username=self.user, password=self.pw)
         except paramiko.ssh_exception.AuthenticationException:
@@ -43,70 +56,63 @@ class ssh(object):
             self.ssh_status = [-1, 'SSH Host does not respond']
             return
         self.channel = self.ssh_socket.invoke_shell()
-        chda = ''
-        # host = str()
-        # srcfile = str()
+        chda = self.readssh()
+        chda = str(chda)
+
+        if '>' in chda[-5:]:
+            self.ssh_status = [1, 'SSH User Mode']
+            if self.verbose:  # verbose on
+                print('SSH Established. User Mode.')
+            return
+        elif '#' in chda[-5:]:
+            self.ssh_status = [1, 'SSH Privilege Mode']
+            # verbose on
+            print('SSH Established. Privilege Mode .')
+            #
+            return
+
+    def readssh(self):
+        output = b''
+        nonewdatacount = 0
         while True:
+            time.sleep(1)
+            nonewdatacount = nonewdatacount + 1
             if self.channel.recv_ready():
-                chda = str(self.channel.recv(9999))
-            else:
-                continue
-            chda = str(chda)
-            if chda.find('>') > 0:
-                self.ssh_status = [1, 'SSH User Mode']
-                return
-            elif chda.find('#') > 0 and chda.find(')#') < 0:
-                self.ssh_status = [1, 'SSH Privilege Mode']
-                return
+                nonewdatacount = 0
+                readlines = self.channel.recv(65535)
+                if len(readlines) == 0:
+                    break
+                output = output + readlines
+                if self.verbose:  # verbose on
+                    print("    Pulled {} Bytes".format(len(output)))
+            if nonewdatacount > 2:
                 break
+        return output
 
     def execute(self, command):
         output = b''
         command = 'terminal length 0 \n' + command
         self.channel.send(command)
-        # time.sleep(1)
-        # output2 = self.channel.recv(len(command))
         self.channel.send('\n')
-        time.sleep(2)
-        while self.channel.recv_ready():
-            output = output + self.channel.recv(65535)
-            time.sleep(2)
+        if self.verbose:  # verbose on
+            print('Executing Commands...')
+        time.sleep(1)
+        output = self.readssh()
         output = streamtolines(output)
         return output
 
 
-#
-# class cdp(object):
-#     def __init__(self, cdp_ssh: ssh, cdp_file):
-#         if len(cdp_file) == 0:
-#             cdp_file = 'cdp.txt'
-#         self.cdp_ssh = cdp_ssh
-#         self.cdp_data = []
-#         self.cdp_status = [-1, 'Unknown Issue']
-#         self.cdp_file = cdp_file
-#         self.run()
-#
-#     def run(self):
-#         if self.cdp_ssh.ssh_status[0] > 0:
-#             cdp_result = self.cdp_ssh.execute('show cdp nei detail')
-#             self.cdp_status = [0, 'Pulling Data ...']
-#             cdp_result = convertcdp(cdp_result)
-#             self.cdp_status = [1, 'Pulled {} Devices.'.format(len(cdp_result))]
-#             cdp_save = savefile(self.cdp_file, cdp_result,
-#                                 ['Hostname', 'IP', 'Platform', 'Capabilities', 'Local Interface',
-#                                  'Remote Interface', 'Version'])
-#             self.cdp_status[1] = self.cdp_status[1] + '\n' + cdp_save[1]
-#             if not cdp_save[0]:
-#                 exit()
-#         else:
-#             self.cdp_status = [-1, self.cdp_ssh.ssh_status[1]]
-#
-
 class ciscoinfo(object):
     def __init__(self, cisco_type, cisco_ssh: ssh, cisco_file):
-        # cisco_type Values
-        # 'cdp'             cdp report
-        # 'interfaces'      interfaces report
+        # parameters cisco_type, cisco_ssh, cisco_file
+        #
+        # cisco_type    Information that will be pulled
+        #   Values:
+        #               'cdp'             cdp report
+        #               'interfaces'      interfaces report
+        #
+        # ssh Object    SSH object with an active connection to an end-point
+        # cisco_file     file name where results will be saved.
         if len(cisco_file) == 0:
             if 'interfaces' in cisco_type:
                 cisco_file = 'interfaces.csv'
@@ -154,7 +160,6 @@ class ciscoinfo(object):
 
 
 def convertintf(interf_data):
-    # pprint.pprint(interf_data)
     intf_list = []
     intf_list_2 = []
     intf_list_3 = []
@@ -175,7 +180,7 @@ def convertintf(interf_data):
         if len(lines[i]) == 0 or l.find('show') > 0:  # remote empty lines and command lines
             continue
         if sw_part == 1:  # process the first command show cdp ne detail
-            if lines[i][0] != ' ':
+            if l[0] in ['v', 't', 'g', 'f']:
                 if len(intf_item) > 0:
                     intf_list.append(intf_item)
                 intf_item = []
@@ -205,7 +210,6 @@ def convertintf(interf_data):
             item_name = l.find('name')
             sw_part = 3
             continue
-
         if sw_part == 2:  # process the second command show interface status
             intf_item_aux = ['', '']
             intf_item_aux[0] = l[0:l.find(' ')]
@@ -216,17 +220,15 @@ def convertintf(interf_data):
             intf_item_aux[0] = l[0:l.find(' ')]
             intf_item_aux[1] = l[item_name:item_name + l[item_name:].find(' ')]
             intf_list_3.append(intf_item_aux)
-
-    for i in range(0, len(intf_list)):  # Merges "show interfaces" and "show interfaces status" commands
+    for i in range(0, len(intf_list)):
         item = intf_list[i]
-        for y in range(0, len(intf_list_2)):
+        for y in range(0, len(intf_list_2)):  # Merges "show interfaces" and "show interfaces status" commands
             item_2 = intf_list_2[y]
-            if item_2[0][0:2] == item[0][0:2] and item_2[0][3:] in item[0]:
-                item[3] = item_2[1]
-                intf_list[i] = item
+            if item_2[0][0:2] == item[0][0:2] and item[0][find_first_number(item[0]):] == item_2[0][2:]:
+                intf_list[i][3] = item_2[1]
                 break
         item = intf_list[i]
-        for y in range(0, len(intf_list_3)):
+        for y in range(0, len(intf_list_3)):  # Merges "show interfaces" and "show vlan" commands
             item_3 = intf_list_3[y]
             if item_3[0] == item[3]:
                 item[4] = item_3[1]
@@ -325,3 +327,34 @@ def streamtolines(stream):
         else:
             line = line + chr(letter)
     return lines
+
+
+def find_first_number(text_string):
+    text_find = '0123456789'
+    letter_index = 0
+    find_switch = False
+    for letter in text_string:
+        if letter in text_find:
+            find_switch = True
+            break
+        letter_index = letter_index + 1
+    if not find_switch:
+        letter_index = -1
+    return letter_index
+
+
+def ip_list(ips):  # Validate and Convert IPs into a str list of individual IPs.
+    ips_end_list = []
+    ips_sum_list = set()
+    for i in ips.split(','):
+        x = i.split('-')
+        try:
+            ips_sum_list.update(
+                ipaddress.summarize_address_range(ipaddress.ip_address(x[0]), ipaddress.ip_address(x[-1])))
+        except ValueError as e:
+            return []  # IP validation. return an empty list if one ip address is incorrect.
+    ips_sum_list = sorted(ips_sum_list)
+    for i in ips_sum_list:
+        for y in i:
+            ips_end_list.append(str(y))
+    return ips_end_list

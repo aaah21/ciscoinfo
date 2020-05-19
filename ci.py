@@ -16,7 +16,8 @@
 import getpass
 import sys
 
-from ciscoinfo import ssh, ciscoinfo
+from ciscoinfo import ssh, ciscoinfo, ip_list
+
 
 
 def check_args(args):
@@ -34,11 +35,13 @@ def check_args(args):
             ar_type = (y[y.find("-t:") + 3:])
         if '-ip:' in y:
             ar_ip = (y[y.find("-ip:") + 4:])
+            print('ar_ip {}'.format(ar_ip))
+            ar_ip = ip_list(ar_ip)
         if '-u:' in y:
             ar_user = (y[y.find("-u:") + 3:])
         if '-o:' in y:
             ar_output = (y[y.find("-o:") + 3:])
-    if ar_ip == '' or ar_type not in ['cdp', 'interfaces']:
+    if len(ar_ip) == 0 or ar_type not in ['cdp', 'interfaces']:
         printarg()
         arg_sw = False
     else:
@@ -69,7 +72,7 @@ def main(argvs):
     if chk_arg[3] == '':
         chk_arg[3] = getpass.getuser()
     pw = getpass.getpass()
-    con = ssh(chk_arg[2], chk_arg[3], pw)
+    con = ssh(chk_arg[2], chk_arg[3], pw, verbose=False)
     print('Trying to connect ...')
     con.connect()
     if con.ssh_status[0] > 0:
