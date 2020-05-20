@@ -19,8 +19,6 @@ import paramiko
 from datetime import datetime
 from os import path
 import ipaddress
-import data_sample
-import pprint
 
 
 class ssh(object):
@@ -44,16 +42,18 @@ class ssh(object):
         self.verbose = verbose
 
     def connect(self):
-        # verbose on
-        print('Opening SSH Connection...')
-        #
+        if self.verbose:  # verbose on
+            print('Opening SSH Connection...')
+            #
         try:
             self.ssh_socket.connect(self.ip, port=22, username=self.user, password=self.pw)
         except paramiko.ssh_exception.AuthenticationException:
             self.ssh_status = [-2, 'SSH Connection. Failed Authentication']
             return
         except:
-            self.ssh_status = [-1, 'SSH Host does not respond']
+            if self.verbose:  # verbose on
+                print('SSH Host does not respond.')
+            self.ssh_status = [-1, 'SSH Host does not respond.']
             return
         self.channel = self.ssh_socket.invoke_shell()
         chda = self.readssh()
@@ -66,9 +66,8 @@ class ssh(object):
             return
         elif '#' in chda[-5:]:
             self.ssh_status = [1, 'SSH Privilege Mode']
-            # verbose on
-            print('SSH Established. Privilege Mode .')
-            #
+            if self.verbose:  # verbose on
+                print('SSH Established. Privilege Mode .')
             return
 
     def readssh(self):
@@ -149,10 +148,9 @@ class ciscoinfo(object):
                 cisco_result = convertcdp(cisco_result)
             if self.cisco_type == 'interfaces':
                 cisco_result = convertintf(cisco_result)
-
             self.cisco_status = [1, 'Pulled {} Lines.'.format(len(cisco_result))]
             cisco_save = savefile(self.cisco_file, cisco_result, run_header)
-            self.cisco_status[1] = self.cisco_status[1] + '\n' + cisco_save[1]
+            self.cisco_status[1] = self.cisco_status[1] + '.' + cisco_save[1]
             if not cisco_save[0]:
                 exit()
         else:
@@ -220,6 +218,7 @@ def convertintf(interf_data):
             intf_item_aux[0] = l[0:l.find(' ')]
             intf_item_aux[1] = l[item_name:item_name + l[item_name:].find(' ')]
             intf_list_3.append(intf_item_aux)
+
     for i in range(0, len(intf_list)):
         item = intf_list[i]
         for y in range(0, len(intf_list_2)):  # Merges "show interfaces" and "show interfaces status" commands
@@ -244,8 +243,8 @@ def convertcdp(cdp_data):
     for i in cdp_data:
         cdp_lines.append(i.rstrip())
     for i in range(0, len(cdp_lines) - 1):
-        if not len(cdp_lines[i]) > 0:
-            continue
+        # if not len(cdp_lines[i]) > 0:
+        #     continue
         y = cdp_lines[i]
         z = ''
         if i > 0:
@@ -289,7 +288,7 @@ def readfile(filename):
 
 def savefile(fn1, lines_list, headers_list):
     header = ''
-    fn2 = fn1[0:fn1.rfind('.')] + '_' + datetime.now().strftime('%Y%m%d_%H%M%S') + fn1[fn1.rfind('.') - 1:]
+    fn2 = fn1[0:fn1.rfind('.')] + '_' + datetime.now().strftime('%Y%m%d_%H%M%S') + fn1[fn1.rfind('.'):]
     for i in range(0, len(headers_list)):
         header = header + '"' + headers_list[i] + '"'
         if i != len(headers_list) - 1:
@@ -300,7 +299,7 @@ def savefile(fn1, lines_list, headers_list):
     try:
         file1 = open(fn1, "w")
     except Exception as e:
-        return False, e
+        return [False, e]
     file1.writelines(header)
     for i in range(0, len(lines_list)):
         line = ''
@@ -311,7 +310,7 @@ def savefile(fn1, lines_list, headers_list):
         line = line + '\n'
         file1.writelines(line)
     file1.close
-    return True, "File Saved!!!"
+    return [True, "File Saved!!!"]
 
 
 def streamtolines(stream):
