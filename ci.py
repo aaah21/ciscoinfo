@@ -4,7 +4,7 @@
 # Arguments
 # Pull data from Cisco Devices and return a formatted file.
 #
-# ci.py        -ip:192.168.1.1 [-u:user] [-o:file.txt]
+# ci.py        -ip:192.168.1.1-192.168.1.100 [-u:user] [-o:file.txt]
 # -t   Info request
 #         -t:cdp
 #         -t:interfaces
@@ -90,7 +90,6 @@ def main(argvs):
         multicon = multiprocessing.Process(target=pull_data, args=(chk_arg[1], i, chk_arg[3], pw, chk_arg[4], True,))
         jobs.append(multicon)
         multicon.start()
-
 
 
 if __name__ == "__main__":

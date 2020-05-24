@@ -2,17 +2,36 @@
 # 05/2020
 #
 # ciscoinfo
-#     Arguments
+#       Arguments:
 #           cisco_type: String. cdp, interfaces
 #           cisco_ssh : ciscoinfo.ssh. ssh class
 #           cisco_file: String. Name of file for output.
 #
 # ssh
-#     Arguments
+#       Arguments:
 #           ip      : String. Device's IP
 #           user    : String. User to login.
 #           pw      : String. Password to login
 #           verbose : Boolean.
+#
+# cdp.  does not save anyfile.
+#       Arguments:
+#           ip      : String. Device's IP
+#           user    : String. User to login.
+#           pw      : String. Password to login
+#       Returns:
+#           object.status = list with status
+#           object.result = list with cdp info
+#
+# interfaces.   does not save anyfile.
+#       Arguments:
+#           ip      : String. Device's IP
+#           user    : String. User to login.
+#           pw      : String. Password to login
+#       Returns:
+#           object.status = list with status
+#           object.result = list with interfaces info
+
 
 import time
 import paramiko
