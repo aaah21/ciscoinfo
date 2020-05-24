@@ -64,15 +64,15 @@ def printarg():
 
 
 def pull_data(ctype, ip, user, pw, filename, verbose):
-    filename = filename[0:filename.rfind('.')] + '_' + ip + filename[filename.rfind('.') :]
+    filename = filename[0:filename.rfind('.')] + '_' + ip + filename[filename.rfind('.'):]
     cdp_info = ciscoinfo
     con = ssh(ip=ip, user=user, pw=pw, verbose=verbose)
     print('Connecting to : {}'.format(ip))
     con.connect()
-    if con.ssh_status[0] > 0:
+    if con.status[0] > 0:
         print('Pulling data ...')
-    cdp_info = ciscoinfo(cisco_type=ctype, cisco_ssh=con, cisco_file=filename)
-    print('{} Result: {}'.format(ip, cdp_info.cisco_status[1]))
+    cdp_info = ciscoinfo(type=ctype, ssh=con, file=filename)
+    print('{} Result: {}'.format(ip, cdp_info.status[1]))
 
 
 def main(argvs):
@@ -87,17 +87,10 @@ def main(argvs):
 
     jobs = []
     for i in chk_arg[2]:
-        multicon = multiprocessing.Process(target=pull_data, args=(chk_arg[1], i, chk_arg[3], pw, chk_arg[4], False,))
+        multicon = multiprocessing.Process(target=pull_data, args=(chk_arg[1], i, chk_arg[3], pw, chk_arg[4], True,))
         jobs.append(multicon)
         multicon.start()
-    #
-    # con = ssh(ip=chk_arg[2], user=chk_arg[3], pw=pw, verbose=False)
-    # print('Trying to connect ...')
-    # con.connect()
-    # if con.ssh_status[0] > 0:
-    #     print('Pulling data ...')
-    # cdp_info = ciscoinfo(cisco_type=chk_arg[1], cisco_ssh=con, cisco_file=chk_arg[4])
-    # print('Result: {}'.format(cdp_info.cisco_status[1]))
+
 
 
 if __name__ == "__main__":

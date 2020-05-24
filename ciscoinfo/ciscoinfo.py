@@ -3,16 +3,16 @@
 #
 # ciscoinfo
 #     Arguments
-#           cisco_type: cdp, interfaces
-#           cisco_ssh : ssh object
-#           cisco_file: Name of file for output.
+#           cisco_type: String. cdp, interfaces
+#           cisco_ssh : ciscoinfo.ssh. ssh class
+#           cisco_file: String. Name of file for output.
 #
 # ssh
 #     Arguments
-#           ip  : Device's IP
-#           user: User to login.
-#           pw  : Password to login
-
+#           ip      : String. Device's IP
+#           user    : String. User to login.
+#           pw      : String. Password to login
+#           verbose : Boolean.
 
 import time
 import paramiko
@@ -24,21 +24,21 @@ import ipaddress
 class ssh(object):
     def __init__(self, ip, user, pw, verbose):
         # parameters IP, User and password
-        # ssh_status[0] = -2    SSH Connection. Failed Authentication
-        # ssh_status[0] = -1    SSH Host does not respond
-        # ssh_status[0] = 0     SSH initial status
-        # ssh_status[0] = 1     SSH Established. SSH User Mode
-        # ssh_status[0] = 2     SSH Established. Privilege Mode
+        # status[0] = -2    SSH Connection. Failed Authentication
+        # status[0] = -1    SSH Host does not respond
+        # status[0] = 0     SSH initial status
+        # status[0] = 1     SSH Established. SSH User Mode
+        # status[0] = 2     SSH Established. Privilege Mode
         #
-        # ssh_status[1]         SSH Message.
+        # status[1]         SSH Message.
         #
         self.ip = ip
         self.user = user
         self.pw = pw
-        self.ssh_status = [0, '']
-        self.ssh_socket = paramiko.SSHClient()
-        self.ssh_socket.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        self.channel = self.ssh_socket.invoke_shell
+        self.status = [0, '']
+        self.socket = paramiko.SSHClient()
+        self.socket.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        self.channel = self.socket.invoke_shell
         self.verbose = verbose
 
     def connect(self):
@@ -46,26 +46,26 @@ class ssh(object):
             print('Opening SSH Connection...')
             #
         try:
-            self.ssh_socket.connect(self.ip, port=22, username=self.user, password=self.pw)
+            self.socket.connect(self.ip, port=22, username=self.user, password=self.pw)
         except paramiko.ssh_exception.AuthenticationException:
-            self.ssh_status = [-2, 'SSH Connection. Failed Authentication']
+            self.status = [-2, 'SSH Connection. Failed Authentication']
             return
         except:
             if self.verbose:  # verbose on
                 print('SSH Host does not respond.')
-            self.ssh_status = [-1, 'SSH Host does not respond.']
+            self.status = [-1, 'SSH Host does not respond.']
             return
-        self.channel = self.ssh_socket.invoke_shell()
+        self.channel = self.socket.invoke_shell()
         chda = self.readssh()
         chda = str(chda)
 
         if '>' in chda[-5:]:
-            self.ssh_status = [1, 'SSH User Mode']
+            self.status = [1, 'SSH User Mode']
             if self.verbose:  # verbose on
                 print('SSH Established. User Mode.')
             return
         elif '#' in chda[-5:]:
-            self.ssh_status = [1, 'SSH Privilege Mode']
+            self.status = [1, 'SSH Privilege Mode']
             if self.verbose:  # verbose on
                 print('SSH Established. Privilege Mode .')
             return
@@ -102,7 +102,7 @@ class ssh(object):
 
 
 class ciscoinfo(object):
-    def __init__(self, cisco_type, cisco_ssh: ssh, cisco_file):
+    def __init__(self, type, ssh: ssh, file):
         # parameters cisco_type, cisco_ssh, cisco_file
         #
         # cisco_type    Information that will be pulled
@@ -112,29 +112,30 @@ class ciscoinfo(object):
         #
         # ssh Object    SSH object with an active connection to an end-point
         # cisco_file     file name where results will be saved.
-        if len(cisco_file) == 0:
-            if 'interfaces' in cisco_type:
+        if len(file) == 0:
+            if 'interfaces' in type:
                 cisco_file = 'interfaces.csv'
-            if 'cdp' in cisco_type:
+            if 'cdp' in type:
                 cisco_file = 'cdp.csv'
 
-        self.cisco_type = cisco_type
-        self.cisco_ssh = cisco_ssh
-        self.cisco_data = []
-        self.cisco_status = [-1, 'Unknown Issue']
-        self.cisco_file = cisco_file
+        self.type = type
+        self.ssh = ssh
+        self.data = []
+        self.status = [-1, 'Unknown Issue']
+        self.file = file
+        self.result = ""
         self.run()
 
     def run(self):
         run_command = ''
         run_header = ''
-        if self.cisco_ssh.ssh_status[0] > 0:
+        if self.ssh.status[0] > 0:
             # Commands and Headers to save files
-            if self.cisco_type == 'cdp':
+            if self.type == 'cdp':
                 run_command = 'show cdp nei detail'
                 run_header = ['Hostname', 'IP', 'Platform', 'Capabilities', 'Local Interface', 'Remote Interface',
                               'Version']
-            if self.cisco_type == 'interfaces':
+            if self.type == 'interfaces':
                 run_command = 'show interfaces\n show interfaces status\n show vlan'
                 run_header = ['Interface', 'State', 'Line Protocol', 'VLAN/Trunk', 'VLAN Name', 'Physical Address',
                               'Internet Address', 'Description', 'MTU', 'BW', 'Reliability', 'Txload', 'Rxload',
@@ -142,19 +143,57 @@ class ciscoinfo(object):
                               'Input Queue (size/max/drops/flushes)', 'Total Output Drops', 'Output Queue (size/max)',
                               'Input Rate', 'Output Rate']
             # Commands and Headers to save files ######################################
-            cisco_result = self.cisco_ssh.execute(run_command)
-            self.cisco_status = [0, 'Pulling Data ...']
-            if self.cisco_type == 'cdp':
-                cisco_result = convertcdp(cisco_result)
-            if self.cisco_type == 'interfaces':
-                cisco_result = convertintf(cisco_result)
-            self.cisco_status = [1, 'Pulled {} Lines.'.format(len(cisco_result))]
-            cisco_save = savefile(self.cisco_file, cisco_result, run_header)
-            self.cisco_status[1] = self.cisco_status[1] + '.' + cisco_save[1]
-            if not cisco_save[0]:
-                exit()
+            self.result = self.ssh.execute(run_command)
+            self.status = [0, 'Pulling Data ...']
+            if self.type == 'cdp':
+                self.result = convertcdp(self.result)
+            if self.type == 'interfaces':
+                self.result = convertintf(self.result)
+            self.status = [1, 'Pulled {} Lines.'.format(len(self.result))]
+            if not self.file == 'nofile':
+                save = savefile(self.file, self.result, run_header)
+                if self.ssh.verbose:
+                    print(save)
+                if not save[0]:
+                    exit()
+            self.status[1] = self.status[1] + '.'
         else:
-            self.cisco_status = [-1, self.cisco_ssh.ssh_status[1]]
+            self.status = [-1, self.ssh.status[1]]
+
+
+class cdp(object):
+    def __init__(self, ip, user, pw):
+        self.ip = ip
+        self.user = user
+        self.pw = pw
+        self.status = ''
+        self.result = ''
+        cdp_info = ciscoinfo
+        con = ssh(ip=self.ip, user=self.user, pw=self.pw, verbose=False)
+        self.status = 'Connecting to : {}'.format(ip)
+        con.connect()
+        if con.status[0] > 0:
+            self.status = 'Pulling data ...'
+        cdp_info = ciscoinfo(type='cdp', ssh=con, file='nofile')
+        self.result = cdp_info.result
+        self.status = ip + ' Result: ' + cdp_info.status[1]
+
+
+class interfaces(object):
+    def __init__(self, ip, user, pw):
+        self.ip = ip
+        self.user = user
+        self.pw = pw
+        self.status = ''
+        self.result = ''
+        con = ssh(ip=self.ip, user=self.user, pw=self.pw, verbose=False)
+        self.status = 'Connecting to : {}'.format(ip)
+        con.connect()
+        if con.status[0] > 0:
+            self.status = 'Pulling data ...'
+        cdp_info = ciscoinfo(type='interfaces', ssh=con, file='nofile')
+        self.result = cdp_info.result
+        self.status = ip + ' Result: ' + cdp_info.status[1]
 
 
 def convertintf(interf_data):
@@ -178,7 +217,7 @@ def convertintf(interf_data):
         if len(lines[i]) == 0 or l.find('show') > 0:  # remote empty lines and command lines
             continue
         if sw_part == 1:  # process the first command show cdp ne detail
-            if l[0] in ['v', 't', 'g', 'f']:
+            if l[0] in 'vtgfpl':
                 if len(intf_item) > 0:
                     intf_list.append(intf_item)
                 intf_item = []
@@ -201,6 +240,7 @@ def convertintf(interf_data):
                     intf_item[ycount + 4] = intf_valuex
         if l.find('port') == 0 and l.find('name') > 0 and l.find('status') > 0 and l.find(
                 'vlan') > 0:  # show vlan interface status
+            # intf_list.append(intf_item)  # append the last interface
             item_vlan = l.find('vlan')
             sw_part = 2
             continue
@@ -218,7 +258,6 @@ def convertintf(interf_data):
             intf_item_aux[0] = l[0:l.find(' ')]
             intf_item_aux[1] = l[item_name:item_name + l[item_name:].find(' ')]
             intf_list_3.append(intf_item_aux)
-
     for i in range(0, len(intf_list)):
         item = intf_list[i]
         for y in range(0, len(intf_list_2)):  # Merges "show interfaces" and "show interfaces status" commands
@@ -309,7 +348,7 @@ def savefile(fn1, lines_list, headers_list):
                 line = line + ','
         line = line + '\n'
         file1.writelines(line)
-    file1.close
+    file1.close()
     return [True, "File Saved!!!"]
 
 
