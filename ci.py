@@ -16,16 +16,18 @@
 import getpass
 import sys
 import multiprocessing
-from ciscoinfo import ssh, ciscoinfo, ip_list
+from ciscoinfo import ssh, ciscoinfo, ip_list, ciscopass
 
 
 def check_args(args):
     # Returns
-    #           [0] Boolean.    True  : Arguments are right, False: Missing or wrong  arguments.
-    #           [1] String.     cdp   : cdp report. interfaces: interfaces report.
-    #           [2] String.     IPs   : IP list.
-    #           [3] String.     user  : User that will be used to  login into devices.
-    #           [4] String.     output: File name where data will be stored.
+    #           [0] Boolean.    True        : Arguments are right, False: Missing or wrong  arguments.
+    #           [1] String.     cdp         : Cisco discovery protocol report.
+    #                           interfaces  : Interfaces report.
+    #                           access      : Try access to the device
+    #           [2] String.     IPs         : IP list.
+    #           [3] String.     user        : User that will be used to  login into devices.
+    #           [4] String.     output      : File name where data will be stored.
     #
 
     ar_type = ar_ip = ar_user = ar_output = ''
@@ -41,7 +43,7 @@ def check_args(args):
             ar_user = (y[y.find("-u:") + 3:])
         if '-o:' in y:
             ar_output = (y[y.find("-o:") + 3:])
-    if len(ar_ip) == 0 or ar_type not in ['cdp', 'interfaces']:
+    if len(ar_ip) == 0 or ar_type not in ['cdp', 'interfaces', 'access']:
         printarg()
         arg_sw = False
     else:
@@ -83,13 +85,23 @@ def main(argvs):
         exit()
     if chk_arg[3] == '':
         chk_arg[3] = getpass.getuser()
-    pw = getpass.getpass()
+
+    main_type = chk_arg[1]
+    main_ip = chk_arg[2]
+    main_user = chk_arg[3]
+    main_pw = getpass.getpass()
+    main_output = chk_arg[4]
 
     jobs = []
-    for i in chk_arg[2]:
-        multicon = multiprocessing.Process(target=pull_data, args=(chk_arg[1], i, chk_arg[3], pw, chk_arg[4], True,))
-        jobs.append(multicon)
-        multicon.start()
+    if main_type == 'access':
+        main_access = ciscopass()
+
+    if main_type in ['cdp', 'interfaces']:
+        for i in main_ip:
+            multicon = multiprocessing.Process(target=pull_data,
+                                               args=(main_type, i, main_user, main_pw, main_output, True,))
+            jobs.append(multicon)
+            multicon.start()
 
 
 if __name__ == "__main__":

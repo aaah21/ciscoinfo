@@ -38,11 +38,17 @@ import paramiko
 from datetime import datetime
 from os import path
 import ipaddress
+import multiprocessing
 
 
 class ssh(object):
     def __init__(self, ip, user, pw, verbose):
-        # parameters IP, User and password
+        # parameters IP, User, password and Verbose.
+        #              ip:      String. Valid IP address
+        #              user:    String. Username used to connect
+        #              pw:      String. Password used to connect
+        #              Verbose: Boolean. True shows progress in console.
+        #
         # status[0] = -2    SSH Connection. Failed Authentication
         # status[0] = -1    SSH Host does not respond
         # status[0] = 0     SSH initial status
@@ -118,6 +124,24 @@ class ssh(object):
         output = self.readssh()
         output = streamtolines(output)
         return output
+
+
+class ciscopass(object):
+    def __init__(self, ip: str, user: str, pw: str, ):
+        # Parameters ip, user and pw.
+        #              ip:      String. List of valid IPs addresses
+        #              user:    String. List of Usernames used to connect. Comma separated.
+        #              pw:      String. List of Passwords used to connect. Comma separated.
+        ip = ip_list(ip)
+        user = user.split(',')
+        pw = pw.split(',')
+        if len(ip) == 0 or len(user) == 0 or len(pw) == 0:
+            return
+        index_worker = 0
+        for ip_worker in ip:
+            for user_worker in user:
+                for pw_worker in pw:
+                    index_worker = index_worker + 1
 
 
 class ciscoinfo(object):
