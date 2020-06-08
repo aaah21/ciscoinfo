@@ -127,25 +127,41 @@ class ssh(object):
 
 
 class ciscopass(object):
-    def __init__(self, ip: str, user: str, pw: str, ):
+    def __init__(self, ip: str, user: str, pw: str, file: str):
         # Parameters ip, user and pw.
         #              ip:      String. List of valid IPs addresses
         #              user:    String. List of Usernames used to connect. Comma separated.
         #              pw:      String. List of Passwords used to connect. Comma separated.
-        ip = ip_list(ip)
+        self.status = [0, '']
         user = user.split(',')
         pw = pw.split(',')
         if len(ip) == 0 or len(user) == 0 or len(pw) == 0:
             return
         index_worker = 0
+        jobs = []
         for ip_worker in ip:
             for user_worker in user:
+                print("Testing: ", ip_worker,user_worker)
                 for pw_worker in pw:
                     index_worker = index_worker + 1
+                    multicon = multiprocessing.Process(target=self.run,
+                                                       args=(ip_worker, user_worker, pw_worker))
+
+                    jobs.append(multicon)
+                    multicon.start()
+
+    def run(self, ip: str, user: str, pw: str):
+
+        con = ssh(ip=ip, user=user, pw=pw, verbose=False)
+        self.status = 'Connecting to : {}'.format(ip)
+        con.connect()
+        self.status = con.status
+        if con.status[0] == 1:
+            print("IP: ", ip, user, pw, " Result: ", con.status[1])
 
 
 class ciscoinfo(object):
-    def __init__(self, type, ssh: ssh, file):
+    def __init__(self, type, ssh: ssh):
         # parameters cisco_type, cisco_ssh, cisco_file
         #
         # cisco_type    Information that will be pulled
@@ -155,18 +171,18 @@ class ciscoinfo(object):
         #
         # ssh Object    SSH object with an active connection to an end-point
         # cisco_file     file name where results will be saved.
-        if len(file) == 0:
-            if 'interfaces' in type:
-                cisco_file = 'interfaces.csv'
-            if 'cdp' in type:
-                cisco_file = 'cdp.csv'
+        # if len(file) == 0:
+        #     if 'interfaces' in type:
+        #         cisco_file = 'interfaces.csv'
+        #     if 'cdp' in type:
+        #         cisco_file = 'cdp.csv'
 
         self.type = type
         self.ssh = ssh
         self.data = []
         self.status = [-1, 'Unknown Issue']
-        self.file = file
-        self.result = ""
+        # self.file = file
+        self.result = []
         self.run()
 
     def run(self):
@@ -176,15 +192,8 @@ class ciscoinfo(object):
             # Commands and Headers to save files
             if self.type == 'cdp':
                 run_command = 'show cdp nei detail'
-                run_header = ['Hostname', 'IP', 'Platform', 'Capabilities', 'Local Interface', 'Remote Interface',
-                              'Version']
             if self.type == 'interfaces':
                 run_command = 'show interfaces\n show interfaces status\n show vlan'
-                run_header = ['Interface', 'State', 'Line Protocol', 'VLAN/Trunk', 'VLAN Name', 'Physical Address',
-                              'Internet Address', 'Description', 'MTU', 'BW', 'Reliability', 'Txload', 'Rxload',
-                              'Media Type', 'Input flow-control', 'Output flow-control', 'Arp Timeout',
-                              'Input Queue (size/max/drops/flushes)', 'Total Output Drops', 'Output Queue (size/max)',
-                              'Input Rate', 'Output Rate']
             # Commands and Headers to save files ######################################
             self.result = self.ssh.execute(run_command)
             self.status = [0, 'Pulling Data ...']
@@ -193,49 +202,71 @@ class ciscoinfo(object):
             if self.type == 'interfaces':
                 self.result = convertintf(self.result)
             self.status = [1, 'Pulled {} Lines.'.format(len(self.result))]
-            if not self.file == 'nofile':
-                save = savefile(self.file, self.result, run_header)
-                if self.ssh.verbose:
-                    print(save)
-                if not save[0]:
-                    exit()
             self.status[1] = self.status[1] + '.'
         else:
             self.status = [-1, self.ssh.status[1]]
 
 
 class cdp(object):
-    def __init__(self, ip, user, pw):
+    def __init__(self, ip, user, pw, file):
         self.ip = ip
         self.user = user
         self.pw = pw
+        self.file = file  # nofile value will not save anyfile.
         self.status = ''
         self.result = ''
+        run_header = ['Hostname', 'IP', 'Platform', 'Capabilities', 'Local Interface', 'Remote Interface',
+                      'Version']
         cdp_info = ciscoinfo
         con = ssh(ip=self.ip, user=self.user, pw=self.pw, verbose=False)
         self.status = 'Connecting to : {}'.format(ip)
         con.connect()
         if con.status[0] > 0:
             self.status = 'Pulling data ...'
-        cdp_info = ciscoinfo(type='cdp', ssh=con, file='nofile')
+        cdp_info = ciscoinfo(type='cdp', ssh=con)
         self.result = cdp_info.result
+        if not self.file == 'nofile':
+            save = savefile(self.file, self.result, run_header)
         self.status = ip + ' Result: ' + cdp_info.status[1]
 
 
 class interfaces(object):
-    def __init__(self, ip, user, pw):
+    def __init__(self, ip, user, pw, file):
         self.ip = ip
         self.user = user
         self.pw = pw
+        self.file = file  # nofile value will not save anyfile.
         self.status = ''
         self.result = ''
+        run_header = ['Interface', 'State', 'Line Protocol', 'VLAN/Trunk', 'VLAN Name', 'Physical Address',
+                      'Internet Address', 'Description', 'Neighbor Hostname', 'Neighbor IP', 'Neighbor interface',
+                      'Neighbor Platform', 'Neighbor Capabilities', 'Neighbor Version', 'MTU', 'BW', 'Reliability',
+                      'Txload', 'Rxload', 'Media Type', 'Input flow-control', 'Output flow-control', 'Arp Timeout',
+                      'Input Queue (size/max/drops/flushes)', 'Total Output Drops', 'Output Queue (size/max)',
+                      'Input Rate', 'Output Rate']
         con = ssh(ip=self.ip, user=self.user, pw=self.pw, verbose=False)
         self.status = 'Connecting to : {}'.format(ip)
         con.connect()
         if con.status[0] > 0:
             self.status = 'Pulling data ...'
-        cdp_info = ciscoinfo(type='interfaces', ssh=con, file='nofile')
-        self.result = cdp_info.result
+        inter_info = ciscoinfo(type='interfaces', ssh=con)
+        cdp_info = ciscoinfo(type='cdp', ssh=con)
+        for inter in range(0, len(inter_info.result)):
+            item = inter_info.result[inter]
+            for i in range(1, 7):
+                item.insert(8, "")
+            for cdpl in cdp_info.result:
+                if item[0] == (cdpl[4].lower()):
+                    item[8] = cdpl[0]
+                    item[9] = cdpl[1]
+                    item[10] = cdpl[5]
+                    item[11] = cdpl[2]
+                    item[12] = cdpl[3]
+                    item[13] = cdpl[6]
+            inter_info.result[inter] = item
+        self.result = inter_info.result
+        if not self.file == 'nofile':
+            save = savefile(self.file, self.result, run_header)
         self.status = ip + ' Result: ' + cdp_info.status[1]
 
 
@@ -260,11 +291,11 @@ def convertintf(interf_data):
         if len(lines[i]) == 0 or l.find('show') > 0:  # remote empty lines and command lines
             continue
         if sw_part == 1:  # process the first command show cdp ne detail
-            if l[0] in 'vtgfpl':
+            if l[0] in 'vtgfpl':  # Initials of every possible interfaces.
                 if len(intf_item) > 0:
                     intf_list.append(intf_item)
                 intf_item = []
-                for intf_i in range(0, 22):  # add X amount of fields to the list
+                for intf_i in range(0, 29):  # add X amount of fields to the list
                     intf_item.append('')
                 intf_item[0] = (l[0:l.find(' ')])  # interface name
                 intf_item[1] = (l[l.find('is ') + 3:l.find(',')])  # Line state
@@ -315,6 +346,9 @@ def convertintf(interf_data):
                 item[4] = item_3[1]
                 intf_list[i] = item
                 break
+    for y in range(0, len(intf_list)):
+        if len(intf_list[y]) == 0:
+            intf_list.remove[y]
     return intf_list
 
 

@@ -16,7 +16,7 @@
 import getpass
 import sys
 import multiprocessing
-from ciscoinfo import ssh, ciscoinfo, ip_list, ciscopass
+from ciscoinfo import ssh, ciscoinfo, ip_list, ciscopass, interfaces, cdp
 
 
 def check_args(args):
@@ -30,7 +30,7 @@ def check_args(args):
     #           [4] String.     output      : File name where data will be stored.
     #
 
-    ar_type = ar_ip = ar_user = ar_output = ''
+    ar_type = ar_ip = ar_user = ar_output = ar_pass = ''
     arg_sw = False
     for i in range(0, len(args)):
         y = args[i].lower()
@@ -43,23 +43,27 @@ def check_args(args):
             ar_user = (y[y.find("-u:") + 3:])
         if '-o:' in y:
             ar_output = (y[y.find("-o:") + 3:])
+        if '-p:' in y:
+            ar_pass = (args[i][args[i].find("-p:") + 3:])
+
     if len(ar_ip) == 0 or ar_type not in ['cdp', 'interfaces', 'access']:
         printarg()
         arg_sw = False
     else:
         arg_sw = True
-    return [arg_sw, ar_type, ar_ip, ar_user, ar_output]
+    return [arg_sw, ar_type, ar_ip, ar_user, ar_pass, ar_output]
 
 
 def printarg():
     print()
     print('Pull data from Cisco Devices and return a formatted file.')
     print()
-    print("ci.py -t:'cdp'|'interfaces' -ip:192.168.1.1 [-u:user] [-o:file.txt]")
+    print("ci.py -t:'cdp'|'interfaces' -ip:192.168.1.1 [-u:user] [-o:file.csv]")
     print()
-    print('-t   Info request')
+    print('-t   Requested info')
     print('         -t:cdp')
     print('         -t:interfaces')
+    print('         -t:access')
     print('-ip  IP of the Cisco device')
     print('-u   User to log in ')
     print('-o   Output File. Default value "output.csv"')
@@ -68,34 +72,38 @@ def printarg():
 def pull_data(ctype, ip, user, pw, filename, verbose):
     filename = filename[0:filename.rfind('.')] + '_' + ip + filename[filename.rfind('.'):]
     cdp_info = ciscoinfo
-    con = ssh(ip=ip, user=user, pw=pw, verbose=verbose)
-    print('Connecting to : {}'.format(ip))
-    con.connect()
-    if con.status[0] > 0:
-        print('Pulling data ...')
-    cdp_info = ciscoinfo(type=ctype, ssh=con, file=filename)
-    print('{} Result: {}'.format(ip, cdp_info.status[1]))
+    # con = ssh(ip=ip, user=user, pw=pw, verbose=verbose)
+    # print('Connecting to : {}'.format(ip))
+    # con.connect()
+    # if con.status[0] > 0:
+    #     print('Pulling data ...')
+    # # '10.70.0.100', 'nclchk', 'BugC@tch3r$', 'nofile'
+    print('Processing IP:', ip)
+    if ctype == "interfaces":
+        cdp_info = interfaces(ip=ip, user=user, pw=pw, file=filename)
+    elif ctype == "cdp":
+        cdp_info = cdp(ip=ip, user=user, pw=pw, file=filename)
+    print('Done IP:', ip, cdp_info.status)
 
 
 def main(argvs):
     chk_arg = check_args(argvs)
-    if chk_arg[4] == '':
-        chk_arg[4] = 'output.csv'
+    if chk_arg[5] == '':
+        chk_arg[5] = 'output.csv'
     if not chk_arg[0]:
         exit()
-    if chk_arg[3] == '':
+    if len(chk_arg[3]) == 0:
         chk_arg[3] = getpass.getuser()
-
+    if len(chk_arg[4]) == 0:
+        chk_arg[4] = getpass.getpass()
     main_type = chk_arg[1]
     main_ip = chk_arg[2]
     main_user = chk_arg[3]
-    main_pw = getpass.getpass()
-    main_output = chk_arg[4]
-
+    main_pw = chk_arg[4]
+    main_output = chk_arg[5]
     jobs = []
     if main_type == 'access':
-        main_access = ciscopass()
-
+        main_access = ciscopass(main_ip, main_user, main_pw, main_output)
     if main_type in ['cdp', 'interfaces']:
         for i in main_ip:
             multicon = multiprocessing.Process(target=pull_data,
