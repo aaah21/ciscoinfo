@@ -3,7 +3,7 @@
 #
 # ciscoinfo
 #       Arguments:
-#           cisco_type: String. cdp, interfaces
+#           cisco_type: String. cdp, interfaces, access, script
 #           cisco_ssh : ciscoinfo.ssh. ssh class
 #           cisco_file: String. Name of file for output.
 #
@@ -14,7 +14,7 @@
 #           pw      : String. Password to login
 #           verbose : Boolean.
 #
-# cdp.  does not save anyfile.
+# cdp.
 #       Arguments:
 #           ip      : String. Device's IP
 #           user    : String. User to login.
@@ -23,7 +23,7 @@
 #           object.status = list with status
 #           object.result = list with cdp info
 #
-# interfaces.   does not save anyfile.
+# interfaces.
 #       Arguments:
 #           ip      : String. Device's IP
 #           user    : String. User to login.
@@ -31,6 +31,20 @@
 #       Returns:
 #           object.status = list with status
 #           object.result = list with interfaces info
+#
+# ciscopass.
+#        Arguments:
+#              ip:      String. List of valid IPs addresses
+#              user:    String. List of Usernames used to connect. Comma separated.
+#              pw:      String. List of Passwords used to connect. Comma separated.
+#
+# script. ** pending **
+#        Arguments:
+#              ip:      String. List of valid IPs addresses
+#              user:    String. List of Usernames used to connect. Comma separated.
+#              pw:      String. List of Passwords used to connect. Comma separated.
+#
+#
 
 
 import time
@@ -41,6 +55,49 @@ import sys
 import multiprocessing
 from datetime import datetime
 from os import path
+from diagrams import Cluster, Diagram
+from diagrams.generic.network import Switch
+import csv
+
+
+class script(object):
+    def __init__(self, ip: str, user: str, pw: str, file: str):
+        # Parameters ip, user and pw.
+        #   ip:      String. List of valid IPs addresses
+        #   user:    String. List of Usernames used to connect. Comma separated.
+        #   pw:      String. List of Passwords used to connect. Comma separated.
+        #
+        self.status = [0, '']
+        self.result = multiprocessing.Queue()
+        user = user.split(',')
+        pw = pw.split(',')
+        if len(ip) == 0 or len(user) == 0 or len(pw) == 0:
+            return
+        index_worker = 0
+        index_count = 0
+        index_max = len(user) * len(pw) * len(ip)
+        jobs = []
+        print()
+        for user_worker in user:
+            for pw_worker in pw:
+                print("Testing...  {:.2f}% Completed".format(index_count / index_max * 100))
+                for ip_worker in ip:
+                    index_worker = index_worker + 1
+                    index_count = index_count + 1
+                    if index_worker == 15:
+                        time.sleep(20)
+                        index_worker = 0
+                    multicon = multiprocessing.Process(target=self.run,
+                                                       args=(ip_worker, user_worker, pw_worker))
+                    jobs.append(multicon)
+                    multicon.start()
+        multicon.join()
+        result = ""
+        swresult = False
+        while not self.result.empty():
+            result = result + " " + self.result.get()
+            swresult = True
+        self.status = [swresult, result]
 
 
 class ssh(object):
@@ -102,7 +159,7 @@ class ssh(object):
         output = b''
         nonewdatacount = 0
         while True:
-            time.sleep(1)
+            time.sleep(2)
             nonewdatacount = nonewdatacount + 1
             if self.channel.recv_ready():
                 nonewdatacount = 0
@@ -130,11 +187,12 @@ class ssh(object):
 
 
 class ciscopass(object):
-    def __init__(self, ip: str, user: str, pw: str, file: str):
+    def __init__(self, ip: str, user: str, pw: str):
         # Parameters ip, user and pw.
-        #              ip:      String. List of valid IPs addresses
-        #              user:    String. List of Usernames used to connect. Comma separated.
-        #              pw:      String. List of Passwords used to connect. Comma separated.
+        #   ip:      String. List of valid IPs addresses
+        #   user:    String. List of Usernames used to connect. Comma separated.
+        #   pw:      String. List of Passwords used to connect. Comma separated.
+        #
         self.status = [0, '']
         self.result = multiprocessing.Queue()
         user = user.split(',')
@@ -160,10 +218,12 @@ class ciscopass(object):
                     jobs.append(multicon)
                     multicon.start()
         multicon.join()
-        print()
-        print('Access found:')
+        result = ""
+        swresult = False
         while not self.result.empty():
-            print(self.result.get())
+            result = result + " " + self.result.get()
+            swresult = True
+        self.status = [swresult, result]
 
     def run(self, ip: str, user: str, pw: str):
         con = ssh(ip=ip, user=user, pw=pw, verbose=False)
@@ -182,15 +242,12 @@ class ciscoinfo(object):
         # cisco_type    Information that will be pulled
         #   Values:
         #               'cdp'             cdp report
+        #               'lldp'            lldp report
         #               'interfaces'      interfaces report
         #
         # ssh Object    SSH object with an active connection to an end-point
         # cisco_file     file name where results will be saved.
-        # if len(file) == 0:
-        #     if 'interfaces' in type:
-        #         cisco_file = 'interfaces.csv'
-        #     if 'cdp' in type:
-        #         cisco_file = 'cdp.csv'
+        #
         self.type = type
         self.ssh = ssh
         self.data = []
@@ -200,11 +257,12 @@ class ciscoinfo(object):
 
     def run(self):
         run_command = ''
-        run_header = ''
         if self.ssh.status[0] > 0:
             # Commands and Headers to save files
             if self.type == 'cdp':
                 run_command = 'show cdp nei detail'
+            if self.type == 'lldp':
+                run_command = 'show lldp nei detail'
             if self.type == 'interfaces':
                 run_command = 'show interfaces\n show interfaces status\n show vlan'
             # Commands and Headers to save files ######################################
@@ -212,16 +270,22 @@ class ciscoinfo(object):
             self.status = [0, 'Pulling Data ...']
             if self.type == 'cdp':
                 self.result = convertcdp(self.result)
+            if self.type == 'lldp':
+                self.result = convertlldp(self.result)
             if self.type == 'interfaces':
                 self.result = convertintf(self.result)
+
             self.status = [1, 'Pulled {} Lines.'.format(len(self.result))]
             self.status[1] = self.status[1] + '.'
         else:
             self.status = [-1, self.ssh.status[1]]
 
 
-class cdp(object):
-    def __init__(self, ip, user, pw, file):
+class neighbor(object):
+    def __init__(self, proto, ip, user, pw, file):
+        if not file:
+            file = proto + ".csv"
+        self.proto = proto
         self.ip = ip
         self.user = user
         self.pw = pw
@@ -230,21 +294,27 @@ class cdp(object):
         self.result = ''
         run_header = ['Hostname', 'IP', 'Platform', 'Capabilities', 'Local Interface', 'Remote Interface',
                       'Version']
-        cdp_info = ciscoinfo
+        neighbor_info = ciscoinfo
         con = ssh(ip=self.ip, user=self.user, pw=self.pw, verbose=False)
         self.status = 'Connecting to : {}'.format(ip)
         con.connect()
         if con.status[0] > 0:
             self.status = 'Pulling data ...'
-        cdp_info = ciscoinfo(type='cdp', ssh=con)
-        self.result = cdp_info.result
+        if self.proto == "cdp":
+            neighbor_info = ciscoinfo(type='cdp', ssh=con)
+        if self.proto == "lldp":
+            neighbor_info = ciscoinfo(type='lldp', ssh=con)
+
+        self.result = neighbor_info.result
         if not self.file == 'nofile':
             save = savefile(self.file, self.result, run_header)
-        self.status = ip + ' Result: ' + cdp_info.status[1]
+        self.status = ip + ' Result: ' + neighbor_info.status[1]
 
 
 class interfaces(object):
     def __init__(self, ip, user, pw, file):
+        if not file:
+            file = "interfaces.csv"
         self.ip = ip
         self.user = user
         self.pw = pw
@@ -252,11 +322,14 @@ class interfaces(object):
         self.status = ''
         self.result = ''
         run_header = ['Interface', 'State', 'Line Protocol', 'VLAN/Trunk', 'VLAN Name', 'Physical Address',
-                      'Internet Address', 'Description', 'Neighbor Hostname', 'Neighbor IP', 'Neighbor interface',
-                      'Neighbor Platform', 'Neighbor Capabilities', 'Neighbor Version', 'MTU', 'BW', 'Reliability',
-                      'Txload', 'Rxload', 'Media Type', 'Input flow-control', 'Output flow-control', 'Arp Timeout',
-                      'Input Queue (size/max/drops/flushes)', 'Total Output Drops', 'Output Queue (size/max)',
-                      'Input Rate', 'Output Rate']
+                      'Internet Address', 'Description', '(CDP)Neighbor Hostname ', '(CDP)Neighbor IP',
+                      '(CDP)Neighbor interface', '(CDP)Neighbor Platform', '(CDP)Neighbor Capabilities',
+                      '(CDP)Neighbor Version', '(LLDP)Neighbor Hostname', '(LLDP)Neighbor IP',
+                      '(LLDP)Neighbor interface', '(LLDP)Neighbor Platform', '(LLDP)Neighbor Capabilities',
+                      '(LLDP)Neighbor Version', 'MTU', 'BW', 'Reliability', 'Txload', 'Rxload', 'Media Type',
+                      'Input flow-control', 'Output flow-control', 'Arp Timeout',
+                      'Input Queue (size/max/drops/flushes)',
+                      'Total Output Drops', 'Output Queue (size/max)', 'Input Rate', 'Output Rate']
         con = ssh(ip=self.ip, user=self.user, pw=self.pw, verbose=False)
         self.status = 'Connecting to : {}'.format(ip)
         con.connect()
@@ -264,9 +337,10 @@ class interfaces(object):
             self.status = 'Pulling data ...'
         inter_info = ciscoinfo(type='interfaces', ssh=con)
         cdp_info = ciscoinfo(type='cdp', ssh=con)
+        lldp_info = ciscoinfo(type='lldp', ssh=con)
         for inter in range(0, len(inter_info.result)):
             item = inter_info.result[inter]
-            for i in range(1, 7):
+            for i in range(1, 14):
                 item.insert(8, "")
             for cdpl in cdp_info.result:
                 if item[0] == (cdpl[4].lower()):
@@ -276,10 +350,22 @@ class interfaces(object):
                     item[11] = cdpl[2]
                     item[12] = cdpl[3]
                     item[13] = cdpl[6]
+            for llpdl in lldp_info.result:
+                if item[0].lower().find(llpdl[4][:2].lower()) >= 0 and item[0].lower().find(
+                        llpdl[4][2:].lower()) >= 0 and item[0].lower().find(llpdl[4][2:].lower()) + len(
+                        llpdl[4][2:].lower()) == len(item[0]):
+                    item[14] = llpdl[0]
+                    item[15] = llpdl[1]
+                    item[16] = llpdl[5]
+                    item[17] = llpdl[2]
+                    item[18] = llpdl[3]
+                    item[19] = llpdl[6]
             inter_info.result[inter] = item
+
         self.result = inter_info.result
         if not self.file == 'nofile':
             save = savefile(self.file, self.result, run_header)
+            self.file = save[1]
         self.status = ip + ' Result: ' + cdp_info.status[1]
 
 
@@ -403,6 +489,43 @@ def convertcdp(cdp_data):
     return cdp_result
 
 
+def convertlldp(lldp_data):
+    lldp_lines = []
+    lldp_result = []
+    lldp_device = lldp_ip = lldp_platform = lldp_capabilities = lldp_interface1 = lldp_interface2 = lldp_version = ''
+    print(lldp_data)
+    for i in lldp_data:
+        lldp_lines.append(i.rstrip())
+    for i in range(0, len(lldp_lines) - 1):
+        y = lldp_lines[i]
+        z = ''
+        if i > 0:
+            z = lldp_lines[i + 1]
+        if ("--------" in y and i > 0) or i == len(lldp_lines) - 2:
+            lldp_item = [lldp_device, lldp_ip, lldp_platform, lldp_capabilities, lldp_interface1, lldp_interface2,
+                         lldp_version]
+            if len(lldp_device) > 0:
+                lldp_result.append(lldp_item)
+        if "--------" in y:
+            lldp_device = lldp_ip = lldp_platform = lldp_capabilities = lldp_interface1 = lldp_interface2 = lldp_version = ''
+            lldp_item = []
+        if "system name" in y.lower():
+            lldp_device = (y[13:])
+        if "ip:" in y.lower():
+            lldp_ip = (y[8:])
+        if "system capabilities" in y.lower():
+            lldp_platform = (y[21:])
+        if "enabled capabilities" in y.lower():
+            lldp_capabilities = (y[22:])
+        if "local intf: " in y.lower():
+            lldp_interface1 = (y[12:])
+        if "port id: " in y.lower():
+            lldp_interface2 = (y[9:])
+        if "system description" in y.lower():
+            lldp_version = z
+    return lldp_result
+
+
 def readfile(filename):
     fileobj = ''
     filetext = ''
@@ -439,7 +562,8 @@ def savefile(fn1, lines_list, headers_list):
         line = line + '\n'
         file1.writelines(line)
     file1.close()
-    return [True, "File Saved!!!"]
+    # return [True, "File Saved!!!"]
+    return [True, fn1]
 
 
 def streamtolines(stream):
@@ -496,12 +620,11 @@ def check_args(args):
     #                           access      : Try access to the device
     #           [2] String.     IPs         : IP list.
     #           [3] String.     user        : User that will be used to  login into devices.
-    #           [4] String.     output      : File name where data will be stored.
+    #
     #
 
-    ar_type = ar_ip = ar_user = ar_output = ar_pass = ''
+    ar_type = ar_ip = ar_user = ar_pass = ''
     arg_sw = False
-    print(args)
     for i in range(0, len(args)):
         y = args[i].lower()
         if '-t:' in y:
@@ -511,54 +634,47 @@ def check_args(args):
             ar_ip = ip_list(ar_ip)
         if '-u:' in y:
             ar_user = (y[y.find("-u:") + 3:])
-        if '-o:' in y:
-            ar_output = (y[y.find("-o:") + 3:])
         if '-p:' in y:
             ar_pass = (args[i][args[i].find("-p:") + 3:])
-    if len(ar_ip) == 0 or ar_type not in ['cdp', 'interfaces', 'access']:
-        printarg()
+    if len(ar_ip) == 0 or ar_type not in ['cdp', 'lldp', 'interfaces', 'access']:
         arg_sw = False
     else:
         arg_sw = True
-    return [arg_sw, ar_type, ar_ip, ar_user, ar_pass, ar_output]
+    return [arg_sw, ar_type, ar_ip, ar_user, ar_pass]
 
 
 def printarg():
     print()
     print('Pull data from Cisco Devices and return a formatted file.')
     print()
-    print("ci.py -t:'cdp'|'interfaces' -ip:192.168.1.1 [-u:user] [-o:file.csv]")
+    print("ci.py -t:'cdp'|'interfaces' -ip:192.168.1.1 [-u:user]")
     print()
     print('-t   Requested info')
     print('         -t:cdp')
+    print('         -t:lldp')
     print('         -t:interfaces')
     print('         -t:access')
     print('-ip  IP of the Cisco device')
     print('-u   User to log in ')
-    print('-o   Output File. Default value "output.csv"')
 
 
-def pull_data(ctype, ip, user, pw, filename, verbose):
-    filename = filename[0:filename.rfind('.')] + '_' + ip + filename[filename.rfind('.'):]
+def pull_data(ctype, ip, user, pw, verbose):
+    filename = ctype + "_" + ip + ".csv"
     cdp_info = ciscoinfo
-    # con = ssh(ip=ip, user=user, pw=pw, verbose=verbose)
-    # print('Connecting to : {}'.format(ip))
-    # con.connect()
-    # if con.status[0] > 0:
-    #     print('Pulling data ...')
-    # # '10.70.0.100', 'nclchk', 'BugC@tch3r$', 'nofile'
     print('Processing IP:', ip)
     if ctype == "interfaces":
         cdp_info = interfaces(ip=ip, user=user, pw=pw, file=filename)
     elif ctype == "cdp":
-        cdp_info = cdp(ip=ip, user=user, pw=pw, file=filename)
+        cdp_info = neighbor(proto="cdp", ip=ip, user=user, pw=pw, file=filename)
+    if ctype == "lldp":
+        cdp_info = neighbor(proto="lldp", ip=ip, user=user, pw=pw, file=filename)
     print('Done IP:', ip, cdp_info.status)
 
 
 def main(argvs):
     chk_arg = check_args(argvs)
-    if chk_arg[5] == '':
-        chk_arg[5] = 'output.csv'
+    #    if not chk_arg[5]:
+    #        chk_arg[5] = '.csv'
     if not chk_arg[0]:
         exit()
     if len(chk_arg[3]) == 0:
@@ -569,14 +685,17 @@ def main(argvs):
     main_ip = chk_arg[2]
     main_user = chk_arg[3]
     main_pw = chk_arg[4]
-    main_output = chk_arg[5]
     jobs = []
     if main_type == 'access':
-        main_access = ciscopass(main_ip, main_user, main_pw, main_output)
-    if main_type in ['cdp', 'interfaces']:
+        main_access = ciscopass(main_ip, main_user, main_pw)
+        print()
+        print('Access found:')
+        print(main_access.status)
+
+    if main_type in ['cdp', 'lldp', 'interfaces']:
         for i in main_ip:
             multicon = multiprocessing.Process(target=pull_data,
-                                               args=(main_type, i, main_user, main_pw, main_output, True,))
+                                               args=(main_type, i, main_user, main_pw, True,))
             jobs.append(multicon)
             multicon.start()
 
