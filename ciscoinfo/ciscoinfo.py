@@ -340,7 +340,7 @@ class interfaces(object):
         lldp_info = ciscoinfo(type='lldp', ssh=con)
         for inter in range(0, len(inter_info.result)):
             item = inter_info.result[inter]
-            for i in range(1, 14):
+            for i in range(1, 13):
                 item.insert(8, "")
             for cdpl in cdp_info.result:
                 if item[0] == (cdpl[4].lower()):
@@ -361,7 +361,6 @@ class interfaces(object):
                     item[18] = llpdl[3]
                     item[19] = llpdl[6]
             inter_info.result[inter] = item
-
         self.result = inter_info.result
         if not self.file == 'nofile':
             save = savefile(self.file, self.result, run_header)
@@ -493,7 +492,7 @@ def convertlldp(lldp_data):
     lldp_lines = []
     lldp_result = []
     lldp_device = lldp_ip = lldp_platform = lldp_capabilities = lldp_interface1 = lldp_interface2 = lldp_version = ''
-    print(lldp_data)
+    #print(lldp_data)
     for i in lldp_data:
         lldp_lines.append(i.rstrip())
     for i in range(0, len(lldp_lines) - 1):
@@ -644,6 +643,7 @@ def check_args(args):
 
 
 def printarg():
+
     print()
     print('Pull data from Cisco Devices and return a formatted file.')
     print()
