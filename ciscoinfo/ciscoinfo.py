@@ -41,6 +41,7 @@
 # script. ** pending **
 #        Arguments:
 #              ip:      String. List of valid IPs addresses
+#              cm:      String. List of commands to be executed. Comma separated.
 #              user:    String. List of Usernames used to connect. Comma separated.
 #              pw:      String. List of Passwords used to connect. Comma separated.
 #
@@ -61,9 +62,10 @@ import csv
 
 
 class script(object):
-    def __init__(self, ip: str, user: str, pw: str, file: str):
+    def __init__(self, ip: str, user: str, pw: str, cm: str):
         # Parameters ip, user and pw.
-        #   ip:      String. List of valid IPs addresses
+        #   ip:      String. List of valid IPs addresses.
+        #   cm:      String. List of commands to be executed. Comma separated.
         #   user:    String. List of Usernames used to connect. Comma separated.
         #   pw:      String. List of Passwords used to connect. Comma separated.
         #
