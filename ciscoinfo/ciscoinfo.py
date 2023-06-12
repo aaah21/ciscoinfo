@@ -56,8 +56,8 @@ import sys
 import multiprocessing
 from datetime import datetime
 from os import path
-from diagrams import Cluster, Diagram
-from diagrams.generic.network import Switch
+#from diagrams import Cluster, Diagram
+#from diagrams.generic.network import Switch
 import csv
 
 
@@ -674,10 +674,12 @@ def pull_data(ctype, ip, user, pw, verbose):
 
 
 def main(argvs):
+    
     chk_arg = check_args(argvs)
     #    if not chk_arg[5]:
     #        chk_arg[5] = '.csv'
     if not chk_arg[0]:
+        printarg()
         exit()
     if len(chk_arg[3]) == 0:
         chk_arg[3] = getpass.getuser()
@@ -687,7 +689,9 @@ def main(argvs):
     main_ip = chk_arg[2]
     main_user = chk_arg[3]
     main_pw = chk_arg[4]
+    print(main_type)
     jobs = []
+    
     if main_type == 'access':
         main_access = ciscopass(main_ip, main_user, main_pw)
         print()
