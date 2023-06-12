@@ -56,7 +56,7 @@ import sys
 import multiprocessing
 from datetime import datetime
 from os import path
-from diagrams import Cluster, Diagram
+#from diagrams import Cluster, Diagram
 from diagrams.generic.network import Switch
 import csv
 
